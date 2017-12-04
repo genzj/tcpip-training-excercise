@@ -37,7 +37,7 @@ int main()
 
     addr_len = sizeof(servaddr);
     if (getsockname(listen_fd, (struct sockaddr *)&servaddr, &addr_len) == -1) {
-            printf("getsockname() failed");
+        printf("getsockname() failed");
     }
     printf("listening on %s:%hu \n", inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
 
@@ -48,18 +48,19 @@ int main()
 
     while(1)
     {
-
         bzero( str, 100);
 
         n = read(comm_fd,str,100);
         if (n == 0) {
-            printf("EOF met");
+            printf("EOF met, exit\n");
             break;
         }
 
         printf("Echoing %ld bytes back - %s",n, str);
 
         write(comm_fd, str, n);
-
     }
+
+    close(comm_fd);
+    close(listen_fd);
 }
