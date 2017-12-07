@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <assert.h>
 #include <netdb.h>
 #include <errno.h>
 #include <stdio.h>
@@ -19,7 +20,7 @@
 
 static int str_echo(int sock_fd);
 static void worker_loop(int listen_fd);
-static int fill_fd_set(int fd_table[MAX_SOCKET_PER_WORKER], fd_set *set, int include_listen);
+static int fill_fd_set(int fd_table[MAX_SOCKET_PER_WORKER], fd_set *set, int socket_num);
 static void init_fd_table(int fd_table[MAX_SOCKET_PER_WORKER]);
 static void remove_socket(int fd_table[MAX_SOCKET_PER_WORKER], int fd, int* socket_num);
 static int add_socket(int fd_table[MAX_SOCKET_PER_WORKER], int fd, int* socket_num);
@@ -98,7 +99,7 @@ static void worker_loop(int listen_fd) {
 
 
     while (1) {
-        maxfd = fill_fd_set(fd_table, &rset, (socket_num < MAX_SOCKET_PER_WORKER));
+        maxfd = fill_fd_set(fd_table, &rset, socket_num);
         ret = select(maxfd + 1, &rset, NULL, NULL, NULL);
         if (ret == 0 || (ret == -1 && errno == EINTR)) {
             continue;
@@ -111,12 +112,8 @@ static void worker_loop(int listen_fd) {
         if (FD_ISSET(listen_fd, &rset)) {
             addr_len = sizeof(client_addr);
             comm_fd = accept(listen_fd, (struct sockaddr*) &client_addr, &addr_len);
-            if (-1 == add_socket(fd_table, comm_fd, &socket_num)) {
-                printf("PID %u is full, close new connection %s:%d\n", getpid(), inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-                close(comm_fd);
-            } else {
-                printf("PID %u is handling %s:%d (%d / %d)\n", getpid(), inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), socket_num, MAX_SOCKET_PER_WORKER);
-            }
+            assert(-1 != add_socket(fd_table, comm_fd, &socket_num));
+            printf("PID %u is handling %s:%d (%d / %d)\n", getpid(), inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), socket_num, MAX_SOCKET_PER_WORKER);
         }
 
         for (int idx = 1; idx < MAX_SOCKET_PER_WORKER; ++idx) {
@@ -139,37 +136,38 @@ static void init_fd_table(int fd_table[MAX_SOCKET_PER_WORKER]) {
 }
 
 static void remove_socket(int fd_table[MAX_SOCKET_PER_WORKER], int fd, int* socket_num) {
+    int idx;
     if (*socket_num == 0) {
         return ;
     }
-    for (int idx = 0; idx < MAX_SOCKET_PER_WORKER; ++idx) {
+    for (idx = 0; idx < *socket_num; ++idx) {
         if (fd_table[idx] == fd) {
-            fd_table[idx] = NO_FD;
-            *socket_num -= 1;
+            break;
         }
     }
+    if (idx == MAX_SOCKET_PER_WORKER) return;
+    memmove(&fd_table[idx], &fd_table[idx + 1], (*socket_num - idx - 1) * sizeof(int));
+    fd_table[*socket_num - 1] = NO_FD;
+    *socket_num -= 1;
 }
 
 static int add_socket(int fd_table[MAX_SOCKET_PER_WORKER], int fd, int* socket_num) {
     if (*socket_num == MAX_SOCKET_PER_WORKER) {
         return -1;
     }
-    for (int idx = 0; idx < MAX_SOCKET_PER_WORKER; ++idx) {
-        if (fd_table[idx] == NO_FD) {
-            fd_table[idx] = fd;
-            *socket_num += 1;
-            return idx;
-        }
-    }
-    return -1;
+    assert(fd_table[*socket_num] == NO_FD);
+    fd_table[*socket_num] = fd;
+    *socket_num += 1;
+    return 0;
 }
 
-static int fill_fd_set(int fd_table[MAX_SOCKET_PER_WORKER], fd_set *set, int include_listen) {
+static int fill_fd_set(int fd_table[MAX_SOCKET_PER_WORKER], fd_set *set, int socket_num) {
     int maxfd = -1;
     FD_ZERO(set);
-    for (int idx = include_listen ? 0 : 1; idx < MAX_SOCKET_PER_WORKER; ++idx) {
-        if (fd_table[idx] > maxfd) maxfd = fd_table[idx];
+    for (int idx = socket_num < MAX_SOCKET_PER_WORKER ? 0 : 1; idx < socket_num; ++idx) {
+        assert(fd_table[idx] != NO_FD);
         FD_SET(fd_table[idx], set);
+        if (fd_table[idx] > maxfd) maxfd = fd_table[idx];
     }
     return maxfd;
 }
