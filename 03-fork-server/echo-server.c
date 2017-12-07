@@ -52,11 +52,12 @@ int main()
         if ((pid = fork()) == 0) {
             close(listen_fd);
             str_echo(comm_fd);
+            close(comm_fd);
             exit(0);
         } else {
             printf("PID %u is handling %s:%d\n", pid, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+            close(comm_fd);
         }
-        close(comm_fd);
     }
 }
 
