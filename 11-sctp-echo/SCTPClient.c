@@ -54,7 +54,13 @@ int main(int argc, char *argv[]) {
   }
 
   ret = sctp_sendmsg(connSock, (void *)buffer, (size_t)datalen, NULL, 0, 0, 0,
-                     0, 0, 0);
+                     1, 0, 0);
+  ret = sctp_sendmsg(connSock, (void *)buffer, (size_t)datalen, NULL, 0, 0, 0,
+                     2, 0, 0);
+  ret = sctp_sendmsg(connSock, (void *)buffer, (size_t)datalen, NULL, 0, 0, 0,
+                     3, 0, 0);
+  ret = sctp_sendmsg(connSock, (void *)buffer, (size_t)datalen, NULL, 0, 0, 0,
+                     4, 0, 0);
   if (ret == -1) {
     printf("Error in sctp_sendmsg\n");
     perror("sctp_sendmsg()");

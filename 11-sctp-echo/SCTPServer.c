@@ -58,6 +58,16 @@ int main() {
     exit(1);
   }
 
+  int enable = 1;
+  ret = setsockopt(listenSock, IPPROTO_SCTP, SCTP_EVENTS, &enable, sizeof(enable));
+
+  if (ret == -1) {
+    printf("setsockopt() failed \n");
+    perror("setsockopt()");
+    close(listenSock);
+    exit(1);
+  }
+
   ret = listen(listenSock, 5);
   if (ret == -1) {
     printf("listen() failed \n");
@@ -80,26 +90,31 @@ int main() {
     if (connSock == -1) {
       printf("accept() failed\n");
       perror("accept()");
-      close(connSock);
       continue;
     } else {
       printf("New client connected....\n");
 	}
 
-    in = sctp_recvmsg(connSock, buffer, sizeof(buffer), (struct sockaddr *)NULL,
-                      0, &sndrcvinfo, &flags);
+    while (1) {
+        in = sctp_recvmsg(connSock, buffer, sizeof(buffer), (struct sockaddr *)NULL,
+                0, &sndrcvinfo, &flags);
 
-    if (in == -1) {
-      printf("Error in sctp_recvmsg\n");
-      perror("sctp_recvmsg()");
-      close(connSock);
-      continue;
-    } else {
-      // Add '\0' in case of text data
-      buffer[in] = '\0';
+        if (in == -1) {
+            printf("Error in sctp_recvmsg\n");
+            perror("sctp_recvmsg()");
+            close(connSock);
+            continue;
+        } else if (in == 0) {
+            printf("Got EOF\n");
+            break;
+        } else {
+            // Add '\0' in case of text data
+            buffer[in] = '\0';
 
-      printf(" Length of Data received: %d\n", in);
-      printf(" Data : %s\n", (char *)buffer);
+            printf(" Length of Data received: %d\n", in);
+            printf(" Stream: %d\n", sndrcvinfo.sinfo_stream);
+            printf(" Data : %s\n", (char *)buffer);
+        }
     }
     close(connSock);
   }
